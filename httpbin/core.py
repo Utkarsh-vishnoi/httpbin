@@ -14,6 +14,7 @@ import random
 import time
 import uuid
 import argparse
+import logging
 
 from flask import (
     Flask,
@@ -68,14 +69,6 @@ ENV_COOKIES = (
     "__utmb",
 )
 
-
-def jsonify(*args, **kwargs):
-    response = flask_jsonify(*args, **kwargs)
-    if not response.data.endswith(b"\n"):
-        response.data += b"\n"
-    return response
-
-
 # Prevent WSGI from correcting the casing of the Location header
 BaseResponse.autocorrect_location_header = False
 
@@ -83,6 +76,12 @@ BaseResponse.autocorrect_location_header = False
 tmpl_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 
 app = Flask(__name__, template_folder=tmpl_dir)
+
+if __name__ != '__main__':
+    gunicorn_logger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level)
+
 app.debug = bool(os.environ.get("DEBUG"))
 app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
 
@@ -157,6 +156,13 @@ swagger_config = {
     "swagger_ui": True,
     "specs_route": "/",
 }
+
+def jsonify(*args, **kwargs):
+    response = flask_jsonify(*args, **kwargs)
+    if not response.data.endswith(b"\n"):
+        response.data += b"\n"
+    app.logger.info(response.get_data(as_text=True))
+    return response
 
 swagger = Swagger(app, sanitizer=NO_SANITIZER, template=template, config=swagger_config)
 
